@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login de prueba</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg: #f3efe9; --fg: #111; --muted: #6a645d; --accent: #ff4a1c; --card: #fffdf9; --line: #e4ddd3; }
+    :root[data-theme="dark"] { --bg: #0d0c0b; --fg: #f4ede6; --muted: #a59e96; --card: #1a1816; --line: #2e2a26; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { background: var(--bg); color: var(--fg); font-family: Inter, system-ui, sans-serif; transition: background .4s; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .hero { position: relative; height: 100vh; min-height: 560px; overflow: hidden; }
+    header, .card { position: relative; z-index: 1; }
+    header { display: flex; align-items: center; gap: 12px; padding: 20px 24px; }
+    header strong { font-weight: 600; letter-spacing: -.01em; }
+    header .grow { flex: 1; }
+    button { font: inherit; cursor: pointer; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); display: grid; place-items: center; }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .icon-btn[aria-pressed="true"] { border-color: var(--fg); }
+
+    .verb-slot { position: absolute; left: 4vw; top: 14vh; width: 52vw; height: 30vh; z-index: 0; }
+    .verb-static { font-weight: 200; font-size: 22vh; line-height: 1; visibility: hidden; }
+    .no-webgl .verb-static { visibility: visible; }
+
+    .card { position: absolute; right: 6vw; top: 50%; transform: translateY(-50%); width: min(380px, 90vw);
+      background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 28px; box-shadow: 0 24px 70px rgba(0,0,0,.08); }
+    .card h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+    .card > p { margin: 0 0 24px; color: var(--muted); font-size: 14px; }
+    .field { display: grid; gap: 6px; margin-bottom: 16px; }
+    .field label { font-size: 13px; font-weight: 500; }
+    .field input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg);
+      color: var(--fg); font: inherit; font-size: 15px; outline: none; transition: border-color .2s; }
+    .field input:focus { border-color: var(--fg); }
+    .hint { min-height: 18px; margin: -8px 0 16px; font-size: 12px; color: var(--muted); }
+    .cta { width: 100%; padding: 14px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; }
+
+    @media (max-width: 760px) {
+      .verb-slot { left: 6vw; top: 10vh; width: 88vw; height: 16vh; }
+      .card { left: 16px; right: 16px; width: auto; top: auto; bottom: 16px; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="hero" id="hero">
+    <h1 class="sr-only">Angel Daniel Es Feo</h1>
+    <header>
+      <strong>Test</strong>
+      <span class="grow"></span>
+      <button class="icon-btn" id="pause" aria-label="Pausar animación" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6v12M15 6v12"/></svg>
+      </button>
+      <button class="icon-btn" id="theme" aria-label="Cambiar tema">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+      </button>
+    </header>
+
+    <div class="verb-slot" id="slot" aria-hidden="true"><span class="verb-static">Angel</span></div>
+
+    <form class="card" id="login" novalidate>
+      <h2>Iniciar sesión</h2>
+      <p>Ingresa con tu cuenta para continuar.</p>
+      <div class="field">
+        <label for="user">Usuario</label>
+        <input id="user" name="user" type="text" autocomplete="username" placeholder="angel@ejemplo.com" />
+      </div>
+      <div class="field">
+        <label for="pass">Contraseña</label>
+        <input id="pass" name="pass" type="password" autocomplete="current-password" placeholder="••••••••" />
+      </div>
+      <p class="hint" id="hint" aria-live="polite"></p>
+      <button class="cta" type="submit">Entrar</button>
+    </form>
+  </main>
+
+  <script type="module">
+    import { createParticleText } from './particle-text.js';
+
+    const root = document.documentElement;
+    const pass = document.getElementById('pass');
+    const hint = document.getElementById('hint');
+
+    const fx = await createParticleText(document.getElementById('hero'), {
+      words: ['Angel', 'Daniel', 'Es', 'Feo'],
+      fontFamily: '"Inter", system-ui, sans-serif',
+      fontWeight: 200,
+      textBox: document.getElementById('slot'),
+      accentIndex: 3,
+      cloud: { cx: 0.36, cy: 0.38 },
+      theme: root.dataset.theme,
+      onFallback: () => root.classList.add('no-webgl'),
+    });
+
+    // The swarm covers the password field while it has focus; typing still works underneath.
+    pass.addEventListener('focus', () => {
+      fx?.shield(pass);
+      hint.textContent = 'Las partículas están cuidando tu contraseña.';
+    });
+    pass.addEventListener('blur', () => {
+      fx?.release();
+      hint.textContent = '';
+    });
+
+    document.getElementById('login').addEventListener('submit', (e) => {
+      e.preventDefault();
+      hint.textContent = 'Esto es solo una prueba: no se envía nada.';
+    });
+
+    const pauseBtn = document.getElementById('pause');
+    pauseBtn.onclick = () => {
+      const paused = pauseBtn.getAttribute('aria-pressed') === 'true';
+      paused ? fx?.play() : fx?.pause();
+      pauseBtn.setAttribute('aria-pressed', String(!paused));
+    };
+    if (fx?.reducedMotion) pauseBtn.hidden = true;
+
+    document.getElementById('theme').onclick = () => {
+      const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      fx?.setTheme(next);
+    };
+    window.fx = fx;
+  </script>
+</body>
+</html>
