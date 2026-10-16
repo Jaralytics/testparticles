@@ -42,6 +42,7 @@ passwordInput.addEventListener('blur', () => fx.release());
 | `play()` / `pause()` | Reanuda o pausa la animación. |
 | `setTheme('light' \| 'dark')` | Cambia la paleta y reinicia el ciclo. |
 | `setWords([...])` | Cambia las palabras y reinicia el ciclo. |
+| `ripple(x, y)` | Lanza una onda desde ese punto (relativo al contenedor). Se dispara sola al hacer clic. |
 | `shield(elemento)` | Manda un enjambre de partículas a cubrir el elemento. |
 | `release()` | Devuelve el enjambre al polvo del fondo. |
 | `destroy()` | Libera la GPU, los observers y los listeners. |
@@ -53,6 +54,7 @@ passwordInput.addEventListener('blur', () => fx.release());
 - **Duración de la transición entre palabras:** opción `timing` (`hold`, `morph`, `spread`, en segundos) y la constante `MORPH_K` en `particle-text.js`.
 - **Qué tanto se dispersa la nube entre palabras:** el multiplicador `vec3(240.0, 150.0, 700.0)` del vertex shader.
 - **Qué tan difusas se ven las letras:** opción `fuzz` (`radius`, `depth`, `wobble`, como fracción del tamaño de la fuente). `{ radius: 0, depth: 0, wobble: 0 }` deja las letras nítidas.
+- **Onda al hacer clic:** opción `ripple` (`speed` en px/s, `width` y `strength` en px, `life` en segundos). `strength: 0` la desactiva.
 - **Densidad del enjambre:** opción `shield` (`pad`, `density`, `size`, `share`).
 
 ## Notas

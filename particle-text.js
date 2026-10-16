@@ -14,6 +14,7 @@
  *     textBox: document.querySelector('.verb-slot'),
  *   });
  *   // fx.pause(); fx.play(); fx.setTheme('dark'); fx.setWords([...]); fx.destroy();
+ *   // fx.ripple(x, y);  // click wave (also fired by pointerdown on the container)
  *   // fx.shield(inputEl); fx.release();  // dust swarms over an element and leaves again
  *
  * Architecture (why it is cheap):
@@ -42,6 +43,8 @@ uniform float uPush, uPushR;
 uniform vec2 uLight;
 uniform float uLightR, uLightK;
 uniform vec3 uDust;
+uniform vec4 uWaves[4]; // click ripples: x, y, start time, strength
+uniform vec4 uWave;     // x: speed (px/s), y: ring width (px), w: life (s)
 uniform vec3 uFuzz; // x: radius, y: depth, z: wobble (px)
 varying vec3 vCol;
 varying float vAlpha;
@@ -93,18 +96,34 @@ void main() {
   float fall = exp(-(dd * dd) / (uPushR * uPushR));
   pos.xy += (dp / dd) * uPush * fall * (1.0 - 0.7 * lit) * (1.0 - swarm) * (0.6 + 0.8 * hash(seed * 5.3));
 
+  // Click ripples: a ring travels outward and shoves particles as it passes.
+  float ringSum = 0.0;
+  for (int k = 0; k < 4; k++) {
+    vec4 w = uWaves[k];
+    float age = uTime - w.z;
+    if (age > 0.0 && age < uWave.w) {
+      vec2 dw = pos.xy - w.xy;
+      float dl = length(dw) + 0.001;
+      float x = (dl - age * uWave.x) / uWave.y;
+      float fade = 1.0 - age / uWave.w;
+      float ring = exp(-x * x) * fade * fade;
+      pos.xy += (dw / dl) * w.w * ring * (1.0 - 0.5 * lit) * (0.7 + 0.6 * hash(seed * 2.9));
+      ringSum += ring;
+    }
+  }
+
   float depth = clamp(abs(pos.z) / 420.0, 0.0, 1.0);
   float flight = active * sin(e * 3.14159);
   vec2 clip = pos.xy / uRes * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-  gl_PointSize = aSize * (1.0 + depth * 3.2) * (1.0 + flight * 0.9) * uPR;
+  gl_PointSize = aSize * (1.0 + depth * 3.2) * (1.0 + flight * 0.9) * (1.0 + 0.7 * min(ringSum, 1.0)) * uPR;
 
   float key = 1.0 + uLightK * exp(-length(pos.xy - uLight) / uLightR);
   vec3 col = mix(uDust, mix(aTintFrom, aTint, e), lit);
   float alpha = mix(uDustA, 1.0, lit) * (1.0 - depth * 0.85);
   if (uDark > 0.5) col *= key; else alpha *= clamp(0.45 + 0.35 * key, 0.0, 1.0);
   vCol = col;
-  vAlpha = alpha * uA;
+  vAlpha = alpha * uA * (1.0 + 1.2 * min(ringSum, 1.0));
   vCore = mix(0.08, 0.32, lit);
 }`;
 
@@ -139,6 +158,7 @@ const DEFAULTS = {
   timing: { first: 0.3, cycle: 3.2, hold: 4, morph: 1.6, spread: 0.7 },
   cloud: { cx: 0.4, cy: 0.34, sx: 0.3, sy: 0.2, share: 0.75 },
   pointer: { radius: 110, strength: 46 },
+  ripple: { speed: 650, width: 48, strength: 75, life: 1.6 }, // click wave; strength 0 = off
   fuzz: { radius: 0.045, depth: 0.9, wobble: 0.012 }, // fractions of the font size; 0 = crisp letters
   shield: { pad: 6, density: 0.45, size: 1.7, share: 0.6 }, // density = particles per px^2, share = max fraction of free dust
   drift: 1,
@@ -229,6 +249,7 @@ export async function createParticleText(container, options = {}) {
     pointer: { ...DEFAULTS.pointer, ...options.pointer },
     shield: { ...DEFAULTS.shield, ...options.shield },
     fuzz: { ...DEFAULTS.fuzz, ...options.fuzz },
+    ripple: { ...DEFAULTS.ripple, ...options.ripple },
   };
   const palette = {
     light: { ...THEMES.light, ...o.colors?.light },
@@ -266,7 +287,7 @@ export async function createParticleText(container, options = {}) {
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
   const U = {};
-  for (const name of ['uFuzz', 'uRes', 'uTime', 'uPR', 'uDrift', 'uDustA', 'uA', 'uDark', 'uPointer', 'uPush', 'uPushR', 'uLight', 'uLightR', 'uLightK', 'uDust']) {
+  for (const name of ['uWaves', 'uWave', 'uFuzz', 'uRes', 'uTime', 'uPR', 'uDrift', 'uDustA', 'uA', 'uDark', 'uPointer', 'uPush', 'uPushR', 'uLight', 'uLightR', 'uLightK', 'uDust']) {
     U[name] = gl.getUniformLocation(prog, name);
   }
 
@@ -282,6 +303,8 @@ export async function createParticleText(container, options = {}) {
   let dirty = true;
   let wordPoints = [];
   let fontPx = 100;
+  const waves = new Float32Array(16).fill(-1000);
+  let waveIdx = 0;
   let time = 0, startedAt = 0, raf = 0, playing = false, destroyed = false;
   let sched = null;
   const ptr = { x: -9999, y: -9999, tx: -9999, ty: -9999, push: 0, pushT: 0, lx: 0, ly: 0, inside: false };
@@ -548,6 +571,8 @@ export async function createParticleText(container, options = {}) {
     gl.uniform1f(U.uLightR, 0.42 * Math.max(W, H));
     gl.uniform1f(U.uLightK, pal.light);
     gl.uniform3fv(U.uDust, pal.dust);
+    gl.uniform4fv(U.uWaves, waves);
+    gl.uniform4f(U.uWave, o.ripple.speed, o.ripple.width, 0, o.ripple.life);
     gl.uniform3f(U.uFuzz, o.fuzz.radius * fontPx, o.fuzz.depth * fontPx, o.fuzz.wobble * fontPx);
     gl.uniform1f(U.uA, Math.min(1, (dark ? 1 : 1.6) / subFrames));
     for (let s = 0; s < subFrames; s++) {
@@ -593,6 +618,15 @@ export async function createParticleText(container, options = {}) {
     ptr.inside = true;
   };
   const onLeave = () => { ptr.inside = false; };
+  function ripple(x, y) {
+    if (reduced || !o.ripple.strength) return;
+    waves.set([x, y, time, o.ripple.strength], 4 * (waveIdx++ % 4));
+  }
+  const onDown = (e) => {
+    const r = container.getBoundingClientRect();
+    ripple(e.clientX - r.left, e.clientY - r.top);
+  };
+  container.addEventListener('pointerdown', onDown);
   container.addEventListener('pointermove', onMove);
   container.addEventListener('pointerleave', onLeave);
 
@@ -626,6 +660,7 @@ export async function createParticleText(container, options = {}) {
     const was = playing;
     pause();
     time = 0;
+    waves.fill(-1000);
     allocate();
     swarm = null;
     canvas.style.zIndex = '0';
@@ -653,6 +688,7 @@ export async function createParticleText(container, options = {}) {
     pause() { userPaused = true; pause(); },
     setTheme,
     setWords(words) { o.words = words; restart(); },
+    ripple,
     shield(el) {
       if (destroyed) return;
       shieldEl = el;
@@ -675,6 +711,7 @@ export async function createParticleText(container, options = {}) {
       mqDark.removeEventListener('change', onScheme);
       container.removeEventListener('pointermove', onMove);
       container.removeEventListener('pointerleave', onLeave);
+      container.removeEventListener('pointerdown', onDown);
       for (const b of Object.values(bufs)) gl.deleteBuffer(b);
       gl.deleteProgram(prog);
       gl.getExtension('WEBGL_lose_context')?.loseContext();
