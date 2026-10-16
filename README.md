@@ -52,6 +52,7 @@ passwordInput.addEventListener('blur', () => fx.release());
 
 - **Duración de la transición entre palabras:** opción `timing` (`hold`, `morph`, `spread`, en segundos) y la constante `MORPH_K` en `particle-text.js`.
 - **Qué tanto se dispersa la nube entre palabras:** el multiplicador `vec3(240.0, 150.0, 700.0)` del vertex shader.
+- **Qué tan difusas se ven las letras:** opción `fuzz` (`radius`, `depth`, `wobble`, como fracción del tamaño de la fuente). `{ radius: 0, depth: 0, wobble: 0 }` deja las letras nítidas.
 - **Densidad del enjambre:** opción `shield` (`pad`, `density`, `size`, `share`).
 
 ## Notas

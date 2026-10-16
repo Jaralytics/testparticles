@@ -42,6 +42,7 @@ uniform float uPush, uPushR;
 uniform vec2 uLight;
 uniform float uLightR, uLightK;
 uniform vec3 uDust;
+uniform vec3 uFuzz; // x: radius, y: depth, z: wobble (px)
 varying vec3 vCol;
 varying float vAlpha;
 varying float vCore;
@@ -66,8 +67,15 @@ void main() {
     sin(uTime * 0.19 + seed * 11.0) * 40.0) * uDrift;
   // Swarm particles buzz in place once they reach the shield.
   vec3 buzz = vec3(sin(uTime * 3.1 + seed * 91.0) * 5.0, cos(uTime * 2.6 + seed * 57.0) * 3.0, 0.0) * swarm;
-  vec3 a = aStart + drift * (1.0 - scatter - morph);
-  vec3 b = aTarget + drift * scatter + buzz * e;
+  // Letters are not crisp: each particle sits off its glyph point (most close, a few far,
+  // some pushed in depth) and wobbles slowly, so words read as dense dust, not ink.
+  float ang = hash(seed * 13.7) * 6.28318;
+  float rr = uFuzz.x * (0.45 * hash(seed * 17.3) + 2.4 * pow(hash(seed * 21.9), 4.0));
+  vec3 fuzz = vec3(cos(ang) * rr, sin(ang) * rr, (hash(seed * 19.1) - 0.5) * uFuzz.y)
+    + vec3(sin(uTime * 0.7 + seed * 31.0), cos(uTime * 0.6 + seed * 29.0), 0.0) * uFuzz.z;
+  float onWord = 1.0 - swarm;
+  vec3 a = aStart + drift * (1.0 - scatter - morph) + fuzz * (scatter + morph);
+  vec3 b = aTarget + drift * scatter + buzz * e + fuzz * onWord * (1.0 - scatter);
   vec3 dir = b - a;
   // Bend the path sideways, strongest mid-flight, so particles arc instead of sliding.
   float swirl = sin(e * 3.14159) * (hash(seed * 7.0) - 0.5) * 0.55;
@@ -131,6 +139,7 @@ const DEFAULTS = {
   timing: { first: 0.3, cycle: 3.2, hold: 4, morph: 1.6, spread: 0.7 },
   cloud: { cx: 0.4, cy: 0.34, sx: 0.3, sy: 0.2, share: 0.75 },
   pointer: { radius: 110, strength: 46 },
+  fuzz: { radius: 0.045, depth: 0.9, wobble: 0.012 }, // fractions of the font size; 0 = crisp letters
   shield: { pad: 6, density: 0.45, size: 1.7, share: 0.6 }, // density = particles per px^2, share = max fraction of free dust
   drift: 1,
   subFrames: 2,            // >1 = cheap motion blur (re-renders the frame at slightly earlier times)
@@ -219,6 +228,7 @@ export async function createParticleText(container, options = {}) {
     cloud: { ...DEFAULTS.cloud, ...options.cloud },
     pointer: { ...DEFAULTS.pointer, ...options.pointer },
     shield: { ...DEFAULTS.shield, ...options.shield },
+    fuzz: { ...DEFAULTS.fuzz, ...options.fuzz },
   };
   const palette = {
     light: { ...THEMES.light, ...o.colors?.light },
@@ -256,7 +266,7 @@ export async function createParticleText(container, options = {}) {
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
   const U = {};
-  for (const name of ['uRes', 'uTime', 'uPR', 'uDrift', 'uDustA', 'uA', 'uDark', 'uPointer', 'uPush', 'uPushR', 'uLight', 'uLightR', 'uLightK', 'uDust']) {
+  for (const name of ['uFuzz', 'uRes', 'uTime', 'uPR', 'uDrift', 'uDustA', 'uA', 'uDark', 'uPointer', 'uPush', 'uPushR', 'uLight', 'uLightR', 'uLightK', 'uDust']) {
     U[name] = gl.getUniformLocation(prog, name);
   }
 
@@ -271,6 +281,7 @@ export async function createParticleText(container, options = {}) {
   const layout = { aStart: 3, aTarget: 3, aTime: 4, aTint: 3, aTintFrom: 3, aSize: 1 };
   let dirty = true;
   let wordPoints = [];
+  let fontPx = 100;
   let time = 0, startedAt = 0, raf = 0, playing = false, destroyed = false;
   let sched = null;
   const ptr = { x: -9999, y: -9999, tx: -9999, ty: -9999, push: 0, pushT: 0, lx: 0, ly: 0, inside: false };
@@ -311,6 +322,7 @@ export async function createParticleText(container, options = {}) {
     const desc100 = mm.fontBoundingBoxDescent || mm.actualBoundingBoxDescent || 20;
     const maxW100 = Math.max(...o.words.map((w) => probe.measureText(w).width), 1);
     const size = Math.max(12, Math.min((box.height / (asc100 + desc100)) * 100, (box.width / maxW100) * 100));
+    fontPx = size;
     const baseline = box.y + (asc100 / 100) * size;
     wordPoints = o.words.map((w) => {
       const pts = sampleText(w, fontFor(size), size, o.thicken, M);
@@ -536,6 +548,7 @@ export async function createParticleText(container, options = {}) {
     gl.uniform1f(U.uLightR, 0.42 * Math.max(W, H));
     gl.uniform1f(U.uLightK, pal.light);
     gl.uniform3fv(U.uDust, pal.dust);
+    gl.uniform3f(U.uFuzz, o.fuzz.radius * fontPx, o.fuzz.depth * fontPx, o.fuzz.wobble * fontPx);
     gl.uniform1f(U.uA, Math.min(1, (dark ? 1 : 1.6) / subFrames));
     for (let s = 0; s < subFrames; s++) {
       gl.uniform1f(U.uTime, time - (s / subFrames) * span);
